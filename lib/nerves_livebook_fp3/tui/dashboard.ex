@@ -1,0 +1,274 @@
+defmodule NervesLivebookFP3.TUI.Dashboard do
+  @moduledoc """
+  The app on the phone's screen: a tab bar, the active tab, and a hint line.
+
+      ╭ raster_ex_ratatui ─────────────────────────╮
+      │ Showcase │ Input                           │
+      ╰────────────────────────────────────────────╯
+      ┌────────────────────────────────────────────┐
+      │               the active tab               │
+      └────────────────────────────────────────────┘
+       drag turn  swipe photo  vol tab  power reset
+
+  It is an ordinary `ExRatatui.App` on the reducer runtime and knows nothing about pixels: `NervesLivebookFP3.TUI.Surface` runs it on the framebuffer, and `Kino.ExRatatui` runs the same module in Livebook. Each tab is a `NervesLivebookFP3.TUI.Dashboard.Tab`; the dashboard keeps their states, routes their timer messages back to them, and hands key events to the one on screen.
+
+  A tab that updates while off screen (a timer message that still arrives) does not cause a render.
+
+  Ported from raster_ex_ratatui's `rpi_framebuffer` example.
+
+  ## Keys
+
+  On the phone the volume keys arrive as `tab`/`back_tab` and the power key as `ctrl+q` (`NervesLivebookFP3.TUI.Buttons`).
+
+  | Key                | Action                                                         |
+  | ------------------ | -------------------------------------------------------------- |
+  | `tab` / `back_tab` | Next / previous tab                                            |
+  | `f1`, `f2`         | Jump to a tab                                                  |
+  | `ctrl+q`           | Quit                                                           |
+  | `q`                | Quit, on tabs that do not use the key (the Input tab types it) |
+
+  Quitting stops the app. On the phone the surface starts a fresh one, since the screen has nothing else to show.
+
+  ## Touch
+
+  A tap on a tab's title switches to it (`tab_at/1`); everything else the finger does below the tab bar goes to the tab on screen as `{:mouse, event, body}`: the `ExRatatui.Event.Mouse` event on a cell, like a mouse in a terminal, and the rect the tab is drawn in, so the tab can tell which of its panes the finger is on. The dashboard learns its size from the surface's mount options and from resize events; before it knows it (a terminal that has not resized yet), `body` is `nil`.
+
+  The hint line follows the input: the tab's touch gestures and the buttons on the phone (where the app's options carry the `surface:` map), its keys anywhere else.
+
+  ## Options
+
+  Every option is handed to every tab: `:spin_ms` (see `NervesLivebookFP3.TUI.Dashboard.Showcase`) and, on the phone, the `surface:` map a `RasterExRatatui` surface adds, with the cell size the layouts use (`NervesLivebookFP3.TUI.Dashboard.Tab.cell_size/1`).
+  """
+
+  use ExRatatui.App, runtime: :reducer
+
+  alias ExRatatui.Event.Key
+  alias ExRatatui.Event.Mouse
+  alias ExRatatui.Event.Resize
+  alias ExRatatui.Layout
+  alias ExRatatui.Layout.Rect
+  alias ExRatatui.Style
+  alias ExRatatui.Text.Line
+  alias ExRatatui.Text.Span
+  alias ExRatatui.Widgets.Block
+  alias ExRatatui.Widgets.Paragraph
+  alias ExRatatui.Widgets.Tabs
+  alias NervesLivebookFP3.TUI.Dashboard.Input
+  alias NervesLivebookFP3.TUI.Dashboard.Showcase
+
+  @tabs [Showcase, Input]
+  @jump %{"f1" => 0, "f2" => 1}
+  @bar_height 3
+
+  @impl ExRatatui.App
+  def init(opts) do
+    size =
+      case {opts[:width], opts[:height]} do
+        {width, height} when is_integer(width) and is_integer(height) -> {width, height}
+        _unknown -> nil
+      end
+
+    {:ok,
+     %{
+       active: 0,
+       size: size,
+       phone?: Keyword.has_key?(opts, :surface),
+       tabs: Map.new(@tabs, &{&1, &1.init(opts)})
+     }}
+  end
+
+  @impl ExRatatui.App
+  def update({:event, %Key{code: "q", kind: "press", modifiers: ["ctrl"]}}, state),
+    do: {:stop, state}
+
+  def update({:event, %Key{code: "tab", kind: "press"}}, state),
+    do: {:noreply, %{state | active: turn(state.active, 1)}}
+
+  def update({:event, %Key{code: "back_tab", kind: "press"}}, state),
+    do: {:noreply, %{state | active: turn(state.active, -1)}}
+
+  def update({:event, %Key{code: code, kind: "press", modifiers: []}}, state)
+      when is_map_key(@jump, code),
+      do: {:noreply, %{state | active: Map.fetch!(@jump, code)}}
+
+  def update({:event, %Resize{width: width, height: height}}, state),
+    do: {:noreply, %{state | size: {width, height}}}
+
+  # The tab bar is the dashboard's: a finger landing on a title switches tabs,
+  # and nothing a finger does there reaches a tab.
+  def update({:event, %Mouse{y: y} = mouse}, state) when y < @bar_height do
+    case {mouse.kind, tab_at(mouse.x)} do
+      {"down", index} when is_integer(index) and index != state.active ->
+        {:noreply, %{state | active: index}}
+
+      _elsewhere ->
+        {:noreply, state, render?: false}
+    end
+  end
+
+  def update({:event, %Mouse{} = mouse}, state) do
+    tab = active(state)
+
+    case tab.update({:mouse, mouse, body(state.size)}, state.tabs[tab]) do
+      {:ok, tab_state} -> {:noreply, put_in(state.tabs[tab], tab_state)}
+      :ignored -> {:noreply, state, render?: false}
+    end
+  end
+
+  def update({:event, event}, state) do
+    tab = active(state)
+
+    case {tab.update({:event, event}, state.tabs[tab]), event} do
+      {{:ok, tab_state}, _event} -> {:noreply, put_in(state.tabs[tab], tab_state)}
+      {:ignored, %Key{code: "q", kind: "press", modifiers: []}} -> {:stop, state}
+      {:ignored, _event} -> {:noreply, state, render?: false}
+    end
+  end
+
+  def update({:info, {:tab, tab, message}}, state) when is_map_key(state.tabs, tab) do
+    case tab.update({:info, message}, state.tabs[tab]) do
+      {:ok, tab_state} ->
+        state = put_in(state.tabs[tab], tab_state)
+        if tab == active(state), do: {:noreply, state}, else: {:noreply, state, render?: false}
+
+      :ignored ->
+        {:noreply, state, render?: false}
+    end
+  end
+
+  def update(_message, state), do: {:noreply, state, render?: false}
+
+  @impl ExRatatui.App
+  def subscriptions(state) do
+    Enum.flat_map(@tabs, & &1.subscriptions(state.tabs[&1], &1 == active(state)))
+  end
+
+  @doc """
+  The module of the tab on screen.
+  """
+  @spec active(map()) :: module()
+  def active(state), do: Enum.at(@tabs, state.active)
+
+  @doc """
+  The tab index `step` tabs away from `index`, wrapping at both ends.
+
+  ## Examples
+
+      iex> NervesLivebookFP3.TUI.Dashboard.turn(1, 1)
+      0
+
+      iex> NervesLivebookFP3.TUI.Dashboard.turn(0, -1)
+      1
+  """
+  @spec turn(non_neg_integer(), integer()) :: non_neg_integer()
+  def turn(index, step), do: Integer.mod(index + step, length(@tabs))
+
+  @doc """
+  The index of the tab whose title is at column `x` of the tab bar, or `nil` for the border, a divider, or the empty rest of the bar.
+
+  The bar draws, after its one-column border, each title padded by a space on both sides, with a one-column divider between two titles: `│ Showcase │ Input │`.
+
+  ## Examples
+
+      iex> Enum.map([0, 1, 10, 11, 12, 18, 19], &NervesLivebookFP3.TUI.Dashboard.tab_at/1)
+      [nil, 0, 0, nil, 1, 1, nil]
+  """
+  @spec tab_at(integer()) :: non_neg_integer() | nil
+  def tab_at(x) do
+    @tabs
+    |> Enum.map(&(String.length(&1.title()) + 2))
+    |> Enum.with_index()
+    |> Enum.reduce_while(1, fn {width, index}, start ->
+      if x >= start and x < start + width,
+        do: {:halt, {:found, index}},
+        else: {:cont, start + width + 1}
+    end)
+    |> case do
+      {:found, index} -> index
+      _past_the_titles -> nil
+    end
+  end
+
+  @impl ExRatatui.App
+  def render(state, %{width: width, height: height}) do
+    [bar, body, hints] = layout(width, height)
+
+    tab = active(state)
+
+    tabs = %Tabs{
+      titles: Enum.map(@tabs, & &1.title()),
+      selected: state.active,
+      style: %Style{fg: :gray},
+      # No :bold here: the raster brightens bold colours, and bright black on cyan is hard to read.
+      highlight_style: %Style{fg: :black, bg: :light_cyan},
+      block: %Block{
+        title: " raster_ex_ratatui ",
+        borders: [:all],
+        border_type: :rounded,
+        border_style: %Style{fg: :dark_gray}
+      }
+    }
+
+    [{tabs, bar}] ++
+      tab.render(state.tabs[tab], body) ++
+      [{hint_line(hints(state)), hints}]
+  end
+
+  @doc """
+  The `{key, action}` pairs for the hint line: the active tab's touch gestures and the phone's buttons on the phone, its keys and the dashboard's anywhere else.
+
+  ## Examples
+
+      iex> {:ok, state} = NervesLivebookFP3.TUI.Dashboard.init([])
+      iex> NervesLivebookFP3.TUI.Dashboard.hints(state)
+      [{"s", "shape"}, {"p", "photo"}, {"space", "pause"}, {"tab", "next"}, {"ctrl+q", "quit"}]
+      iex> NervesLivebookFP3.TUI.Dashboard.hints(%{state | phone?: true})
+      [{"drag", "turn"}, {"swipe", "photo"}, {"vol", "tab"}, {"power", "reset"}]
+  """
+  @spec hints(map()) :: [{String.t(), String.t()}]
+  def hints(%{phone?: true} = state) do
+    tab = active(state)
+    tab.touch_hints(state.tabs[tab]) ++ [{"vol", "tab"}, {"power", "reset"}]
+  end
+
+  def hints(state) do
+    tab = active(state)
+    tab.hints(state.tabs[tab]) ++ [{"tab", "next"}, {"ctrl+q", "quit"}]
+  end
+
+  @doc """
+  The rect the active tab is drawn in on a `{width, height}` grid, or `nil` while the size is unknown.
+
+  ## Examples
+
+      iex> NervesLivebookFP3.TUI.Dashboard.body({106, 45})
+      %ExRatatui.Layout.Rect{x: 0, y: 3, width: 106, height: 41}
+
+      iex> NervesLivebookFP3.TUI.Dashboard.body(nil)
+      nil
+  """
+  @spec body({pos_integer(), pos_integer()} | nil) :: Rect.t() | nil
+  def body(nil), do: nil
+
+  def body({width, height}) do
+    [_bar, body, _hints] = layout(width, height)
+    body
+  end
+
+  defp layout(width, height) do
+    area = %Rect{x: 0, y: 0, width: width, height: height}
+    Layout.split(area, :vertical, [{:length, @bar_height}, {:fill, 1}, {:length, 1}])
+  end
+
+  defp hint_line(hints) do
+    spans =
+      Enum.flat_map(hints, fn {key, action} ->
+        [
+          %Span{content: " #{key}", style: %Style{fg: :light_yellow, modifiers: [:bold]}},
+          %Span{content: " #{action} ", style: %Style{fg: :gray}}
+        ]
+      end)
+
+    %Paragraph{text: %Line{spans: spans}}
+  end
+end

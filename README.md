@@ -132,6 +132,7 @@ nerves_livebook_fp3
 ├── ex_rmtfs, ex_remoteproc   modem storage daemon, ADSP start-up
 ├── ex_qcom_smgr, fp3_camera, ex_audio, ex_nfc, ex_location, ex_qbootctl
 ├── fp3_modem, vintage_net_qmi, qmi   cellular (only with FP3_APN)
+├── ex_ratatui, raster_ex_ratatui, kino_ex_ratatui   terminal UIs on the screen
 └── livebook + kino
 ```
 
