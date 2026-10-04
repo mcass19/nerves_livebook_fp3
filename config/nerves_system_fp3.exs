@@ -118,6 +118,14 @@ config :livebook, LivebookWeb.Endpoint,
     |> :crypto.hash("nerves_livebook_fp3-not-a-secret-key-base")
     |> Base.encode64()
 
+# Terminal UIs on the screen (NervesLivebookFP3.TUI.start/1). These are
+# RasterExRatatui.Framebuffer.Surface options, and start/1's own win over
+# them. The panel's size and depth are read from sysfs; scale 4 makes the
+# portrait 1080x2160 panel a 45x67 grid. No keyboard: nothing on the phone
+# has letter keys, and looking for one rescans every input device.
+config :nerves_livebook_fp3, NervesLivebookFP3.TUI,
+  surface: [scale: 4, touch: true, keyboard: false]
+
 # Bluetooth LE through the kernel's hci0 (the WCN3680 behind btqcomsmd).
 # BlueHeron takes the controller over exclusively, so bluetoothd must not
 # run.

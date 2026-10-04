@@ -1,0 +1,91 @@
+defmodule NervesLivebookFP3.TUITest do
+  # One TUI owns the screen, under a registered name: these run one at a time.
+  use ExUnit.Case, async: false
+
+  alias NervesLivebookFP3.FakeInput
+  alias NervesLivebookFP3.FakeScreen
+  alias NervesLivebookFP3.TUI
+
+  @moduletag :tmp_dir
+  @moduletag :capture_log
+
+  defmodule Counter do
+    use ExRatatui.App, runtime: :reducer
+
+    @impl true
+    def init(_opts), do: {:ok, 0}
+
+    @impl true
+    def update(_message, count), do: {:noreply, count}
+
+    @impl true
+    def render(count, frame),
+      do: [
+        {%ExRatatui.Widgets.Paragraph{text: "#{count}"},
+         %ExRatatui.Layout.Rect{width: frame.width, height: 1}}
+      ]
+  end
+
+  setup %{tmp_dir: root} do
+    # The application isn't started in tests; its TUI supervisor is.
+    start_supervised!({DynamicSupervisor, name: TUI.Supervisor, strategy: :one_for_one})
+    previous = Application.get_env(:nerves_livebook_fp3, TUI)
+
+    Application.put_env(:nerves_livebook_fp3, TUI,
+      surface: [root: root, input: FakeInput, keyboard: false, scale: 4, rotate: 0]
+    )
+
+    on_exit(fn ->
+      TUI.stop()
+
+      if previous,
+        do: Application.put_env(:nerves_livebook_fp3, TUI, previous),
+        else: Application.delete_env(:nerves_livebook_fp3, TUI)
+    end)
+
+    %{root: FakeScreen.setup!(root)}
+  end
+
+  test "starts the dashboard from the configured options, once", %{root: root} do
+    refute TUI.running?()
+
+    assert {:ok, pid} = TUI.start()
+    assert TUI.running?()
+
+    assert RasterExRatatui.Surface.server(pid) |> ExRatatui.Runtime.snapshot() |> Map.fetch!(:mod) ==
+             TUI.Dashboard
+
+    assert FakeScreen.console(root) == "0"
+
+    assert TUI.start() == {:error, :already_running}
+  end
+
+  test "options win over the configured ones" do
+    assert {:ok, pid} = TUI.start(app: Counter, rotate: 90)
+
+    assert RasterExRatatui.Surface.server(pid) |> ExRatatui.Runtime.snapshot() |> Map.fetch!(:mod) ==
+             Counter
+
+    assert RasterExRatatui.Surface.raster(pid) |> RasterExRatatui.Raster.grid_size() == {90, 33}
+  end
+
+  test "stop gives the screen back to the console", %{root: root} do
+    assert TUI.stop() == {:error, :not_running}
+
+    {:ok, pid} = TUI.start()
+    ref = Process.monitor(pid)
+
+    assert TUI.stop() == :ok
+    assert_receive {:DOWN, ^ref, :process, ^pid, _reason}
+    refute TUI.running?()
+    assert FakeScreen.console(root) == "1"
+  end
+
+  test "a screen that never shows up stays down", %{root: root} do
+    File.rm!(Path.join(root, "dev/fb0"))
+    File.rm_rf!(Path.join(root, "sys/class/graphics"))
+
+    assert {:error, {:framebuffer, _reason}} = TUI.start(framebuffer_timeout: 0)
+    refute TUI.running?()
+  end
+end
