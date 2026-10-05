@@ -18,15 +18,18 @@ again. One app owns the screen at a time.
 ## Free the screen
 
 Scenic (notebook 11) needs the screen and the touchscreen to itself
-too. If its viewport is still running, stop it there first. Starting a
-TUI detaches the IEx console from the screen by itself.
+too. If its viewport is still running, stop it there first. A TUI
+detaches the IEx console from the screen by itself.
 
-## Show the Dashboard
+## The Dashboard
 
-The Dashboard has two tabs. *Showcase* turns a lit 3D object and shows a
-photo as real bitmaps at the screen's resolution, next to a live BEAM
+The Dashboard has two tabs. *Showcase* turns a lit 3D object and shows
+a photo as real bitmaps at the screen's resolution, next to a live BEAM
 readout drawn with ordinary cells. *Input* shows every touch and button
 press as the app receives it.
+
+This puts it on the screen (firmware built with `FP3_TUI_BOOT=1` shows
+it from the moment the phone starts):
 
 ```elixir
 NervesLivebookFP3.TUI.start()

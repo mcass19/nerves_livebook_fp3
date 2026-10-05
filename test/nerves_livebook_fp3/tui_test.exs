@@ -26,6 +26,19 @@ defmodule NervesLivebookFP3.TUITest do
       ]
   end
 
+  defmodule Broken do
+    use ExRatatui.App, runtime: :reducer
+
+    @impl true
+    def init(_opts), do: raise("broken app")
+
+    @impl true
+    def update(_message, state), do: {:noreply, state}
+
+    @impl true
+    def render(_state, _frame), do: []
+  end
+
   setup %{tmp_dir: root} do
     # The application isn't started in tests; its TUI supervisor is.
     start_supervised!({DynamicSupervisor, name: TUI.Supervisor, strategy: :one_for_one})
@@ -87,5 +100,54 @@ defmodule NervesLivebookFP3.TUITest do
 
     assert {:error, {:framebuffer, _reason}} = TUI.start(framebuffer_timeout: 0)
     refute TUI.running?()
+  end
+
+  test "an app that fails to start leaves the screen to the console", %{root: root} do
+    assert {:error, _reason} = TUI.start(app: Broken)
+    refute TUI.running?()
+    assert FakeScreen.console(root) == "1"
+  end
+
+  describe "start_at_boot/0" do
+    test "does nothing unless the config says boot: true" do
+      assert TUI.start_at_boot() == :ignore
+      refute TUI.running?()
+    end
+
+    test "puts the dashboard on the screen from a task" do
+      configure(boot: true)
+
+      assert {:ok, task} = TUI.start_at_boot()
+      ref = Process.monitor(task)
+      assert_receive {:DOWN, ^ref, :process, ^task, :normal}, 5_000
+      assert TUI.running?()
+    end
+
+    test "only logs when the screen never shows up", %{root: root} do
+      File.rm_rf!(Path.join(root, "sys/class/graphics"))
+      configure(boot: true, surface: [framebuffer_timeout: 0])
+
+      log =
+        ExUnit.CaptureLog.capture_log(fn ->
+          {:ok, task} = TUI.start_at_boot()
+          ref = Process.monitor(task)
+          assert_receive {:DOWN, ^ref, :process, ^task, :normal}, 5_000
+        end)
+
+      assert log =~ "no TUI on the screen at boot"
+      refute TUI.running?()
+    end
+  end
+
+  # Merges into the config the setup wrote, `surface:` included.
+  defp configure(opts) do
+    config = Application.get_env(:nerves_livebook_fp3, TUI)
+    surface = Keyword.merge(config[:surface], Keyword.get(opts, :surface, []))
+
+    Application.put_env(
+      :nerves_livebook_fp3,
+      TUI,
+      config |> Keyword.merge(opts) |> Keyword.put(:surface, surface)
+    )
   end
 end
