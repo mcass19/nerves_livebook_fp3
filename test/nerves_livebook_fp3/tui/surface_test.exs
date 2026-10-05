@@ -66,7 +66,13 @@ defmodule NervesLivebookFP3.TUI.SurfaceTest do
 
     send(surface, {:input_event, "/dev/input/event0", [{:ev_key, :key_volumeup, 0}]})
     send(surface, {:input_event, "/dev/input/event0", :disconnect})
+    # The surface has handled both (and forwarded anything they made) once it answers.
+    _ = :sys.get_state(surface)
     assert %{subscription_count: 2} = Runtime.snapshot(app)
+
+    # A press on the same path does switch tabs, so the check above can fail.
+    send(surface, {:input_event, "/dev/input/event0", [{:ev_key, :key_volumeup, 1}]})
+    assert FakeScreen.eventually(fn -> Runtime.snapshot(app).subscription_count == 0 end)
 
     reader = readers(surface)["/dev/input/event2"]
     Process.exit(reader, :kill)
@@ -77,6 +83,65 @@ defmodule NervesLivebookFP3.TUI.SurfaceTest do
 
     assert Process.alive?(surface)
     assert server(surface) == app
+  end
+
+  test "touches reach the dashboard next to the buttons", %{root: root} do
+    surface = start(root, touch: true)
+    app = server(surface)
+
+    assert FakeScreen.eventually(fn ->
+             :sys.get_state(surface).state.devices |> RasterExRatatui.Input.Devices.touch() ==
+               "/dev/input/event1"
+           end)
+
+    # A finger down on the 3D object holds it, which stops its spin timer;
+    # lifting it starts the timer again. Frames as the Himax panel sends them.
+    send(
+      surface,
+      {:input_event, "/dev/input/event1",
+       [
+         {:ev_abs, :abs_mt_tracking_id, 7},
+         {:ev_abs, :abs_mt_position_x, 500},
+         {:ev_abs, :abs_mt_position_y, 300},
+         {:ev_key, :btn_touch, 1},
+         {:ev_abs, :abs_x, 500},
+         {:ev_abs, :abs_y, 300}
+       ]}
+    )
+
+    assert FakeScreen.eventually(fn -> Runtime.snapshot(app).subscription_count == 1 end)
+
+    send(
+      surface,
+      {:input_event, "/dev/input/event1",
+       [{:ev_abs, :abs_mt_tracking_id, -1}, {:ev_key, :btn_touch, 0}]}
+    )
+
+    assert FakeScreen.eventually(fn -> Runtime.snapshot(app).subscription_count == 2 end)
+
+    # The touch reader going away is the library's business, not the buttons'.
+    touch_reader = :sys.get_state(surface).state.devices.touch_reader
+    Process.exit(touch_reader, :kill)
+
+    assert FakeScreen.eventually(fn ->
+             :sys.get_state(surface).state.devices.touch_reader != touch_reader
+           end)
+
+    assert map_size(readers(surface)) == 3
+  end
+
+  defmodule OneButton do
+    @moduledoc false
+    defdelegate start_link(opts), to: FakeInput
+    defdelegate stop(pid), to: FakeInput
+    def enumerate, do: Enum.take(FakeInput.enumerate(), 1)
+  end
+
+  test "warns when the phone has fewer than three buttons", %{root: root} do
+    log = ExUnit.CaptureLog.capture_log(fn -> start(root, input: OneButton) end)
+
+    assert log =~ "expected 3 buttons"
+    assert log =~ "/dev/input/event0"
   end
 
   test "reads no buttons with buttons: false", %{root: root} do

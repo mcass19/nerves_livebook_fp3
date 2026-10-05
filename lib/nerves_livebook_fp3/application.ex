@@ -24,6 +24,8 @@ defmodule NervesLivebookFP3.Application do
              name: NervesLivebookFP3.Supervisor
            ) do
       validate_firmware()
+      # After validating: a screen that fails must not cost the firmware.
+      NervesLivebookFP3.TUI.start_at_boot()
       {:ok, pid}
     end
   end

@@ -79,7 +79,7 @@ defmodule NervesLivebookFP3.MixProject do
 
       # Terminal UIs on the screen: ex_ratatui apps drawn on the framebuffer
       # by raster_ex_ratatui, and mirrored in Livebook by kino_ex_ratatui.
-      {:ex_ratatui, "~> 0.16"},
+      {:ex_ratatui, "~> 0.17"},
       {:raster_ex_ratatui, "~> 0.3"},
       {:kino_ex_ratatui, "~> 0.2"},
 

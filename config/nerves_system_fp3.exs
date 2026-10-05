@@ -116,12 +116,15 @@ config :livebook, LivebookWeb.Endpoint,
     |> :crypto.hash("nerves_livebook_fp3-not-a-secret-key-base")
     |> Base.encode64()
 
-# Terminal UIs on the screen (NervesLivebookFP3.TUI.start/1). These are
-# RasterExRatatui.Framebuffer.Surface options, and start/1's own win over
-# them. The panel's size and depth are read from sysfs; scale 4 makes the
-# portrait 1080x2160 panel a 45x67 grid. No keyboard: nothing on the phone
-# has letter keys, and looking for one rescans every input device.
+# Terminal UIs on the screen (NervesLivebookFP3.TUI). The IEx console keeps
+# the screen at startup; build with FP3_TUI_BOOT=1 to put the Dashboard
+# there instead (`boot: true`). `surface:` holds RasterExRatatui.Framebuffer.Surface
+# options, and start/1's own win over them. The panel's size and depth are
+# read from sysfs; scale 4 makes the portrait 1080x2160 panel a 45x67 grid.
+# No keyboard: nothing on the phone has letter keys, and looking for one
+# rescans every input device.
 config :nerves_livebook_fp3, NervesLivebookFP3.TUI,
+  boot: System.get_env("FP3_TUI_BOOT") == "1",
   surface: [scale: 4, touch: true, keyboard: false]
 
 # Bluetooth LE through the kernel's hci0 (the WCN3680 behind btqcomsmd).
