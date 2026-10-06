@@ -108,6 +108,22 @@ defmodule NervesLivebookFP3.TUITest do
     assert FakeScreen.console(root) == "1"
   end
 
+  describe "snapshot/0" do
+    test "is a PNG of the whole panel" do
+      {:ok, _pid} = TUI.start(app: Counter)
+
+      assert {:ok,
+              <<137, "PNG", 13, 10, 26, 10, 13::32, "IHDR", width::32, height::32, _::binary>>} =
+               TUI.snapshot()
+
+      assert {width, height} == {1080, 2160}
+    end
+
+    test "needs a TUI on the screen" do
+      assert TUI.snapshot() == {:error, :not_running}
+    end
+  end
+
   describe "start_at_boot/0" do
     test "does nothing unless the config says boot: true" do
       assert TUI.start_at_boot() == :ignore

@@ -141,6 +141,21 @@ the next tap. The same module also runs in the notebook:
 Kino.ExRatatui.new(Demo.Counter, height: "300px")
 ```
 
+## Take a picture of the screen
+
+`NervesLivebookFP3.TUI.snapshot/0` turns whatever the TUI shows right
+now into a PNG, straight from the pixels it drew: no second phone
+needed to share it. This shows it here with a button to save it:
+
+```elixir
+{:ok, png} = NervesLivebookFP3.TUI.snapshot()
+
+Kino.Layout.grid([
+  Kino.Image.new(png, :png),
+  Kino.Download.new(fn -> png end, filename: "screen.png")
+])
+```
+
 ## Stop
 
 Stopping the TUI hands the screen back to the IEx console, and frees
