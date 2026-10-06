@@ -4,6 +4,7 @@ defmodule NervesLivebookFP3.TUI do
 
       NervesLivebookFP3.TUI.start()               # the Dashboard
       NervesLivebookFP3.TUI.start(app: MyApp)     # any ExRatatui.App
+      NervesLivebookFP3.TUI.snapshot()            # {:ok, png} of the screen
       NervesLivebookFP3.TUI.stop()                # IEx comes back on the screen
 
   One TUI owns the screen at a time. It runs under `NervesLivebookFP3.TUI.Supervisor` as a temporary child: if it crashes for good, it stays down and nothing else on the phone notices. Scenic (notebook 11) needs the screen and the touch panel to itself too, so stop one before starting the other.
@@ -69,6 +70,19 @@ defmodule NervesLivebookFP3.TUI do
   """
   @spec running?() :: boolean()
   def running?, do: Process.whereis(Surface) != nil
+
+  @doc """
+  What the TUI shows on the screen right now, as a PNG: the whole panel at its own resolution and in its own orientation, so an app started with `rotate:` comes out on its side. Returns `{:error, :not_running}` when there's no TUI.
+
+      {:ok, png} = NervesLivebookFP3.TUI.snapshot()
+      File.write!("/data/screen.png", png)
+  """
+  @spec snapshot() :: {:ok, binary()} | {:error, :not_running}
+  def snapshot do
+    {:ok, Surface |> RasterExRatatui.Surface.raster() |> RasterExRatatui.Raster.to_png()}
+  catch
+    :exit, {:noproc, _call} -> {:error, :not_running}
+  end
 
   @doc """
   Starts the Dashboard from a task when the config says `boot: true`, and returns the task; `:ignore` otherwise.
