@@ -36,7 +36,7 @@ out |> String.split("\n") |> Enum.filter(&(&1 =~ "fp3-module-slots"))
 | Modem (IMEI, network, signal) | `QMI` | 08 |
 | Bluetooth LE | `BlueHeron` | 09 |
 | Loudspeaker, earpiece, microphone | `ExAudio`, `aplay`, `arecord` | 10, 12 |
-| Screen, touchscreen, buttons | `Scenic`, `InputEvent` | 11 |
+| Screen, touchscreen, buttons | `Scenic`, `InputEvent`, `ExRatatui` + `RasterExRatatui` | 11, 13 |
 | AI: Nx, object detection, speech to text, LLM chat | `nerves_ai` stack | 12 |
 
 Not available yet: classic Bluetooth. The radio supports it, but this

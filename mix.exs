@@ -77,6 +77,12 @@ defmodule NervesLivebookFP3.MixProject do
       # Touchscreen and buttons (Linux input events)
       {:input_event, "~> 1.4"},
 
+      # Terminal UIs on the screen: ex_ratatui apps drawn on the framebuffer
+      # by raster_ex_ratatui, and mirrored in Livebook by kino_ex_ratatui.
+      {:ex_ratatui, "~> 0.17"},
+      {:raster_ex_ratatui, "~> 0.3"},
+      {:kino_ex_ratatui, "~> 0.2"},
+
       # Scenic UI on the screen. Pinned to the commits that compile on
       # Elixir 1.19+, which aren't released on Hex yet.
       {:scenic, github: "ScenicFramework/scenic", ref: "e0ae569", override: true},
