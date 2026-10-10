@@ -1,0 +1,33 @@
+From: Marc Lainez <marc.lainez@gmail.com>
+Subject: [PATCH] ir3: pass a4xx/a5xx SSBO accesses a byte offset again
+
+Since SSBO intrinsics carry offset_shift, nir_lower_explicit_io folds the
+dword shift into the offset source. lower_offset_for_ssbo copies that source
+into the *_ssbo_ir3 intrinsic unchanged, but on a4xx/a5xx ldgb/stgb and the
+SSBO atomics consume it as a byte address. Every 32-bit SSBO element i was
+accessed at byte i instead of 4*i: stores overlapped and all data landed in
+the first quarter of the buffer.
+
+Shift the source back to bytes on those generations; a6xx and later only
+use the shifted dword offset.
+
+Upstream-Status: Pending
+---
+--- a/src/freedreno/ir3/ir3_nir_lower_io_offsets.c
++++ b/src/freedreno/ir3/ir3_nir_lower_io_offsets.c
+@@ -223,6 +223,15 @@
+    int cur_shift = nir_intrinsic_offset_shift(intrinsic);
+    int extra_shift = shift - cur_shift;
+
++   /* a4xx/a5xx ldgb/stgb/atomics also take the original offset source, as a
++    * byte address, so undo the offset_shift that nir_lower_explicit_io
++    * folded into it.
++    */
++   if (c->gen < 6 && cur_shift > 0) {
++      new_intrinsic->src[offset_src_idx] = nir_src_for_ssa(
++         nir_ishl_imm(b, intrinsic->src[offset_src_idx].ssa, cur_shift));
++   }
++
+    /* TODO if the intrinsic has a BASE, we have to be careful when inserting a
+     * right shift as the offset may be negative. So we'd have to add the BASE to
+     * the offset before shifting. For now, as our input intrinsics don't support
