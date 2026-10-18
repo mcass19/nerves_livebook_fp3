@@ -12,17 +12,16 @@ config :shoehorn,
 # Advance the system clock on devices without a real-time clock.
 config :nerves, :erlinit, update_clock: true
 
-# SSH access for `mix upload` and IEx. Keys come from the build machine.
-keys =
-  System.user_home!()
-  |> Path.join(".ssh/id_{rsa,ecdsa,ed25519}.pub")
-  |> Path.wildcard()
-
-if keys == [] do
-  IO.warn("No SSH public keys in ~/.ssh: `mix upload` and ssh won't work on this firmware.")
-end
-
-config :nerves_ssh, authorized_keys: Enum.map(keys, &File.read!/1)
+# Configure the device for SSH IEx prompt access and firmware updates
+#
+# * See https://nerves-ssh.hexdocs.pm/readme.html for general SSH configuration
+# * See https://ssh-subsystem-fwup.hexdocs.pm/readme.html for firmware updates
+#
+config :nerves_ssh,
+  daemon_option_overrides: [
+    pwdfun: {NervesLivebookFP3, :ssh_check_pass, 2},
+    auth_method_kb_interactive_data: {NervesLivebookFP3, :ssh_show_prompt, 3}
+  ]
 
 # Advertise nerves.local (and the unique nerves-XXXX.local hostname).
 # With several phones on one network, drop "nerves" and use the unique
@@ -83,7 +82,10 @@ wifi = [
 config :vintage_net,
   regulatory_domain: "BE",
   power_managers:
-    if(apn, do: [{Fp3Modem.PowerManager, [ifname: "rmnet0", watchdog_timeout: 120_000]}], else: []),
+    if(apn,
+      do: [{Fp3Modem.PowerManager, [ifname: "rmnet0", watchdog_timeout: 120_000]}],
+      else: []
+    ),
   config:
     [
       {"usb0", %{type: VintageNetDirect}},
