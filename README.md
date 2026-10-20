@@ -35,6 +35,7 @@ Fairphone 3 hardware libraries loaded.
 | `10_audio.livemd` | Loudspeaker, earpiece and microphone: tones, recording, playback |
 | `11_screen_touch_buttons.livemd` | Draw on the screen, touch input, volume and power buttons |
 | `12_ai_on_the_phone.livemd` | The AI stack, YOLO object detection on a photo and live on video, Whisper speech to text, TinyLlama chat |
+| `13_ssh_keys.livemd` | The SSH keys the phone accepts: list, add and delete them |
 
 Notebooks ship in `priv/samples` and are copied to
 `/data/livebook/notebooks` at boot, then starred so they appear on
@@ -48,6 +49,37 @@ interface and the system's `rumble` tool for the vibrator, and
 `input_event` for the touchscreen and buttons. `ex_audio`
 sets up the loudspeaker route and `ex_qbootctl` marks each boot slot
 successful.
+
+## SSH access and keys
+
+The phone runs an SSH server with an IEx prompt, which also installs
+firmware updates:
+
+```sh
+ssh livebook@nerves.local                               # password: livebook
+ssh -s livebook@nerves.local fwup < nerves_livebook_fp3.fw
+```
+
+Build with `config :nerves_livebook_fp3, password: "…"` to use another
+password. To log in with a key instead, add your public key with the
+`13_ssh_keys` notebook, which lists, adds and deletes the keys the phone
+accepts. From IEx on the phone:
+
+```elixir
+NervesSSH.configuration().authorized_keys
+NervesSSH.add_authorized_key("ssh-ed25519 AAAA… you@laptop")
+NervesSSH.remove_authorized_key("ssh-ed25519 AAAA… you@laptop")
+```
+
+The keys are kept in `/data/nerves_ssh/default_user/authorized_keys`, so
+they survive reboots and firmware updates; flashing an image erases them.
+
+> [!IMPORTANT]
+> Images up to v0.2.0 shipped with my own SSH public key, and a phone that
+> ran one keeps accepting it, even after a firmware update. Please delete
+> it: it's the `ED25519` key with fingerprint
+> `SHA256:7ZM/SmuSfVmHkt69TzXLJ4n9X34aRpORFaEi6yys5Fc`. Use the
+> `13_ssh_keys` notebook, or flash a new image.
 
 ## Models
 
@@ -72,8 +104,9 @@ the phone to Wi-Fi, and start the matching capability (`NervesAI.LLM`,
   the phone's ARMv8.0 cores: `mix.exs` sets the flags for target builds
   (plain `armv8-a`, no dot-product or fp16 instructions; the precompiled
   `whisper_cpp` artifact needs ARMv8.2 and is never used).
-* An SSH public key in `~/.ssh`, which is baked into the firmware for
-  `mix upload` and SSH access.
+* No SSH key is baked into the firmware: `mix upload` logs in with the
+  password (see [SSH access and keys](#ssh-access-and-keys)), or with a
+  key you've added on the phone.
 
 ### Build the firmware
 
