@@ -2,7 +2,7 @@ defmodule NervesLivebookFP3.MixProject do
   use Mix.Project
 
   @app :nerves_livebook_fp3
-  @version "0.2.0"
+  @version "0.3.0"
 
   # Deterministic builds — same input, same firmware bytes.
   System.put_env("ERL_COMPILER_OPTIONS", "deterministic")
