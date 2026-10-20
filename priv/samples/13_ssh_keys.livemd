@@ -1,0 +1,146 @@
+# SSH keys
+
+## Overview
+
+The phone runs an SSH server. `ssh livebook@nerves.local` opens an IEx
+prompt on it, and `ssh -s livebook@nerves.local fwup < firmware.fw`
+installs a firmware update. It accepts the password (`livebook` unless
+the firmware was built with another one) and every public key listed in
+this notebook.
+
+The keys live in `/data/nerves_ssh/default_user/authorized_keys`, so
+they survive reboots and firmware updates. Flashing a new image erases
+them.
+
+**A phone that ever ran firmware v0.2.0 or earlier still accepts the SSH
+key of the person who built those images**: the `ED25519` key with
+fingerprint `SHA256:7ZM/SmuSfVmHkt69TzXLJ4n9X34aRpORFaEi6yys5Fc`. Delete
+it below.
+
+## Helpers
+
+`NervesSSH` keeps the list of authorized keys, one `authorized_keys`
+line each, and writes it to `/data` whenever it changes. These helpers
+read a line's type, fingerprint and comment, and check a pasted key
+before adding it.
+
+```elixir
+defmodule SSHKeys do
+  def list, do: NervesSSH.configuration().authorized_keys
+
+  def describe(line) do
+    case decode(line) do
+      [{key, attrs} | _] ->
+        %{
+          type: line |> String.split() |> hd(),
+          fingerprint: to_string(:ssh.hostkey_fingerprint(:sha256, key)),
+          comment: to_string(Keyword.get(attrs, :comment, ""))
+        }
+
+      _ ->
+        %{type: "?", fingerprint: "(unreadable)", comment: ""}
+    end
+  end
+
+  def add(text) do
+    line = String.trim(text)
+
+    cond do
+      line == "" ->
+        {:error, "Paste a public key first."}
+
+      String.contains?(line, "PRIVATE KEY") ->
+        {:error, "That's a private key. Paste the contents of the .pub file instead."}
+
+      String.contains?(line, "\n") ->
+        {:error, "Paste one key at a time."}
+
+      decode(line) == [] ->
+        {:error, "Not a public key. It should look like: ssh-ed25519 AAAA… you@laptop"}
+
+      line in list() ->
+        {:error, "This key is already on the phone."}
+
+      true ->
+        NervesSSH.add_authorized_key(line)
+    end
+  end
+
+  def remove(line), do: NervesSSH.remove_authorized_key(line)
+
+  # :ssh_file.decode/2 raises on malformed key data instead of returning [].
+  defp decode(line) do
+    :ssh_file.decode(line, :auth_keys)
+  rescue
+    _ -> []
+  end
+end
+```
+
+## Manage the keys
+
+Delete a key with its button, or paste a public key (the one line in
+`~/.ssh/id_ed25519.pub` on your computer, for example) and add it. The
+list redraws after each change. Deleting every key is fine: the
+password still works.
+
+```elixir
+defmodule SSHKeys.UI do
+  def show do
+    frame = Kino.Frame.new()
+    render(frame, nil)
+    frame
+  end
+
+  defp render(frame, message) do
+    rows =
+      for line <- SSHKeys.list() do
+        %{type: type, fingerprint: fp, comment: comment} = SSHKeys.describe(line)
+        delete = Kino.Control.button("Delete")
+
+        Kino.listen(delete, fn _event ->
+          SSHKeys.remove(line)
+          render(frame, "Deleted #{fp}.")
+        end)
+
+        Kino.Layout.grid([Kino.Markdown.new("`#{type}` `#{fp}` #{comment}"), delete],
+          columns: 2
+        )
+      end
+
+    rows = if rows == [], do: [Kino.Markdown.new("_No keys: only the password works._")], else: rows
+
+    form =
+      Kino.Control.form([key: Kino.Input.textarea("Public key")],
+        submit: "Add key",
+        reset_on_submit: [:key]
+      )
+
+    Kino.listen(form, fn %{data: %{key: text}} ->
+      case SSHKeys.add(text) do
+        :ok -> render(frame, "Added #{SSHKeys.describe(String.trim(text)).fingerprint}.")
+        {:error, reason} -> render(frame, reason)
+      end
+    end)
+
+    status = if message, do: [Kino.Markdown.new("**#{message}**")], else: []
+
+    Kino.Frame.render(frame, Kino.Layout.grid(status ++ rows ++ [form], columns: 1))
+  end
+end
+
+SSHKeys.UI.show()
+```
+
+## From IEx
+
+The same, over `ssh livebook@nerves.local`:
+
+```elixir
+NervesSSH.configuration().authorized_keys
+```
+
+```elixir
+# NervesSSH.add_authorized_key("ssh-ed25519 AAAA… you@laptop")
+# NervesSSH.remove_authorized_key("ssh-ed25519 AAAA… you@laptop")
+```
