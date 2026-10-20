@@ -1,0 +1,57 @@
+# SSH keys
+
+## Keys
+
+```elixir
+defmodule SSHKeys do
+  def show(frame \\ Kino.Frame.new(), message \\ nil) do
+    rows =
+      for key <- NervesSSH.configuration().authorized_keys do
+        delete = Kino.Control.button("Delete")
+
+        Kino.listen(delete, fn _ ->
+          NervesSSH.remove_authorized_key(key)
+          show(frame, "Deleted.")
+        end)
+
+        Kino.Layout.grid([Kino.Markdown.new("`#{describe(key)}`"), delete], columns: 2)
+      end
+
+    form =
+      Kino.Control.form([key: Kino.Input.textarea("Public key")],
+        submit: "Add key",
+        reset_on_submit: [:key]
+      )
+
+    Kino.listen(form, fn %{data: %{key: key}} -> show(frame, add(String.trim(key))) end)
+
+    status = List.wrap(message && Kino.Markdown.new("**#{message}**"))
+    Kino.Frame.render(frame, Kino.Layout.grid(status ++ rows ++ [form], columns: 1))
+    frame
+  end
+
+  defp describe(key) do
+    case decode(key) do
+      [{pub, attrs}] -> "#{:ssh.hostkey_fingerprint(:sha256, pub)} #{attrs[:comment]}"
+      _ -> key
+    end
+  end
+
+  defp add(key) do
+    cond do
+      key in NervesSSH.configuration().authorized_keys -> "Already there."
+      match?([_], decode(key)) -> NervesSSH.add_authorized_key(key) && "Added."
+      true -> "Not a public key line."
+    end
+  end
+
+  # :ssh_file.decode/2 raises on malformed key data.
+  defp decode(key) do
+    :ssh_file.decode(key, :auth_keys)
+  rescue
+    _ -> []
+  end
+end
+
+SSHKeys.show()
+```
