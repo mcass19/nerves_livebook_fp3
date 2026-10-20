@@ -59,8 +59,7 @@ modem =
 
 # wlan0 is always configured, so wpa_supplicant runs and the Wi-Fi
 # notebook can scan. Build with FP3_WIFI_SSID (and FP3_WIFI_PASSPHRASE for
-# a protected network) and every phone joins the workshop venue's network
-# on first boot. A network set later from the Wi-Fi notebook is saved and
+# a protected network) and every phone joins that network on first boot. A network set later from the Wi-Fi notebook is saved and
 # takes precedence. The credentials end up in the image.
 wifi_networks =
   case {System.get_env("FP3_WIFI_SSID"), System.get_env("FP3_WIFI_PASSPHRASE")} do

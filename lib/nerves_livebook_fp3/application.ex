@@ -7,7 +7,7 @@ defmodule NervesLivebookFP3.Application do
   @impl true
   def start(_type, _args) do
     # Livebook needs writable notebooks, but the release is read-only:
-    # sync the shipped notebooks to /data, leaving attendee edits alone,
+    # sync the shipped notebooks to /data, leaving edits made on the phone alone,
     # and star them so they're listed on Livebook's home page.
     sync_notebooks() |> star_notebooks()
 
@@ -49,10 +49,10 @@ defmodule NervesLivebookFP3.Application do
              stderr_to_stdout: true
            ) do
         {_, 0} -> :ok
-        {out, _} -> Logger.warning("[workshop] microphone warm-up failed: #{String.trim(out)}")
+        {out, _} -> Logger.warning("microphone warm-up failed: #{String.trim(out)}")
       end
     else
-      Logger.warning("[workshop] no sound card, microphone not warmed up")
+      Logger.warning("no sound card, microphone not warmed up")
     end
   end
 
@@ -78,7 +78,7 @@ defmodule NervesLivebookFP3.Application do
           :ok
 
         {:error, reason} ->
-          Logger.warning("[workshop] firmware validation failed: #{inspect(reason)}")
+          Logger.warning("firmware validation failed: #{inspect(reason)}")
       end
     end
   end
@@ -130,7 +130,7 @@ defmodule NervesLivebookFP3.Application do
     {shipped, removed}
   rescue
     e ->
-      Logger.warning("[workshop] notebook sync failed: #{Exception.message(e)}")
+      Logger.warning("notebook sync failed: #{Exception.message(e)}")
       {[], []}
   end
 
@@ -176,7 +176,7 @@ defmodule NervesLivebookFP3.Application do
       end
     end
   rescue
-    e -> Logger.warning("[workshop] starring notebooks failed: #{Exception.message(e)}")
+    e -> Logger.warning("starring notebooks failed: #{Exception.message(e)}")
   end
 
   defp notebook_title(path, fallback) do

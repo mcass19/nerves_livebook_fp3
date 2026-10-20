@@ -1,6 +1,6 @@
 defmodule NervesLivebookFP3 do
   @moduledoc """
-  Workshop firmware for the Fairphone 3 / 3+, built on Nerves.
+  Livebook firmware for the Fairphone 3 / 3+, built on Nerves.
 
   Boots into a Livebook served on port 4000. The notebooks ship in
   `priv/samples`, are copied to `/data/livebook/notebooks` (writable) at
