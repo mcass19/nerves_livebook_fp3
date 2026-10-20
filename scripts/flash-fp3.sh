@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #
-# Flash the workshop firmware onto a Fairphone 3 over USB.
+# Flash nerves_livebook_fp3 onto a Fairphone 3 or 3+ over USB.
 #
 # Plug a phone in fastboot mode and run this script. It works out what
 # the phone needs:
@@ -166,7 +166,7 @@ flash_phone() {
 
   unlocked=$(getvar "$sn" unlocked)
   say "Phone $sn has the stock bootloader (unlocked: ${unlocked:-unknown})"
-  confirm "This erases the whole phone and replaces Android with the workshop firmware. Continue?"
+  confirm "This erases the whole phone and replaces Android with nerves_livebook_fp3. Continue?"
 
   if [ "$unlocked" != "yes" ]; then
     say "Unlocking the bootloader"
@@ -181,7 +181,7 @@ flash_phone() {
     fi
   fi
 
-  say "Installing lk2nd and the workshop firmware"
+  say "Installing lk2nd and nerves_livebook_fp3"
   run fastboot -s "$sn" set_active a
   run fastboot -s "$sn" flash dtbo "$CACHE_DIR/dtbo.img"
   run fastboot -s "$sn" flash boot "$CACHE_DIR/lk2nd-msm8953.img"
@@ -205,7 +205,7 @@ while true; do
   sn=$(wait_for_phone)
   flash_phone "$sn"
   FLASHED="$FLASHED$sn "
-  say "Done with $sn. The phone boots the workshop firmware; Livebook is at http://nerves.local once it's on the network."
+  say "Done with $sn. The phone boots nerves_livebook_fp3; Livebook is at http://nerves.local:4000 once it's on the network."
   $LOOP || break
   echo "Unplug it and plug in the next phone."
 done

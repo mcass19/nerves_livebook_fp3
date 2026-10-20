@@ -68,8 +68,8 @@ config :livebook,
 
 config :livebook, Livebook.Apps.Manager, retry_backoff_base_ms: 5_000
 
-# Workshop-specific overrides — token-less (the device is the trust
-# boundary; you have to be on the local network).
+# Token-less: the device is the trust boundary, so you have to be on the
+# local network.
 #
 # default_runtime / default_app_runtime live in config/runtime.exs:
 # Livebook.Runtime.Embedded.new() calls into :livebook, which isn't
@@ -81,9 +81,9 @@ config :livebook,
   apps_path: "/data/livebook/apps",
   cookie: :nerves_livebook_fp3
 
-# Where the workshop notebooks live on disk. They ship in priv/samples;
+# Where the notebooks live on disk. They ship in priv/samples;
 # at boot any notebook not yet in /data/livebook/notebooks/ is copied
-# there so it's writable and attendee edits are kept.
+# there so it's writable and edits are kept.
 #
 # erlinit mounts /dev/mmcblk0p62p3 (f2fs) at /root, and /data is a
 # symlink to /root, so /data/... and /root/... are the same storage.
