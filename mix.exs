@@ -102,8 +102,8 @@ defmodule NervesLivebookFP3.MixProject do
 
       # Terminal UIs on the screen: ex_ratatui apps drawn on the framebuffer
       # by raster_ex_ratatui, and mirrored in Livebook by kino_ex_ratatui.
-      {:ex_ratatui, "~> 0.17"},
-      {:raster_ex_ratatui, "~> 0.3"},
+      {:ex_ratatui, "~> 0.19"},
+      {:raster_ex_ratatui, "~> 0.4"},
       {:kino_ex_ratatui, "~> 0.2"},
 
       # Scenic UI on the screen. Pinned to the commits that compile on
@@ -128,6 +128,10 @@ defmodule NervesLivebookFP3.MixProject do
       {:nx_eigen, "~> 0.2", targets: :nerves_system_fp3, env: :dev},
       # Builds whisper_cpp from source.
       {:rustler, "~> 0.38.0", runtime: false},
+      # ex_ratatui needs rustler_precompiled 0.10 (it adds NIF 2.18 for OTP 29);
+      # whisper_cpp still declares ~> 0.9.0, which 0.10 only adds to, and is
+      # built from source on the phone anyway.
+      {:rustler_precompiled, "~> 0.10", override: true},
 
       # ---------------- FP3 hardware userspace ----------------
       {:ex_rmtfs, github: "mlainez/ex_rmtfs"},
