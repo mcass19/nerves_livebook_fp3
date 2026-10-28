@@ -1,0 +1,167 @@
+# Terminal UIs on the screen with ExRatatui
+
+## Overview
+
+[ExRatatui](https://hexdocs.pm/ex_ratatui) builds terminal UIs in Elixir
+on top of the Rust [ratatui](https://ratatui.rs) library. An app
+describes each frame as a list of widgets (paragraphs, tabs, gauges,
+charts…) and receives events: keys, mouse, resizes. Usually it runs in
+a terminal. Here
+[raster_ex_ratatui](https://hexdocs.pm/raster_ex_ratatui) draws its
+cells as pixels on the phone's screen through `/dev/fb0`: touches arrive
+as mouse events on the cell under the finger, and the volume and power
+buttons as keys.
+
+`NervesLivebookFP3.TUI` puts an app on the screen and takes it off
+again. One app owns the screen at a time.
+
+## Free the screen
+
+Scenic (notebook 11) needs the screen and the touchscreen to itself
+too. If its viewport is still running, stop it there first. A TUI
+detaches the IEx console from the screen by itself.
+
+## The Dashboard
+
+The Dashboard has two tabs. *Showcase* turns a lit 3D object and shows
+a photo as real bitmaps at the screen's resolution, next to a live BEAM
+readout drawn with ordinary cells. *Input* shows every touch and button
+press as the app receives it.
+
+This puts it on the screen (firmware built with `FP3_TUI_BOOT=1` shows
+it from the moment the phone starts):
+
+```elixir
+NervesLivebookFP3.TUI.start()
+```
+
+## Touch and buttons
+
+| Input | In the Dashboard |
+|---|---|
+| Tap a tab title | Switch to that tab |
+| Volume up / down | Next / previous tab |
+| Drag on the 3D object | Turn it by hand |
+| Swipe across the photo | Next / previous photo |
+| Power | Quit; a fresh Dashboard starts |
+
+On the *Input* tab, touching the four corners shows whether the touches
+land under the finger. The hint line at the bottom of the screen lists
+what the current tab does.
+
+## The same app in Livebook
+
+[kino_ex_ratatui](https://hexdocs.pm/kino_ex_ratatui) runs an ExRatatui
+app in the notebook, in a terminal emulator in the browser. This is the
+same `NervesLivebookFP3.TUI.Dashboard` module, as a second app with its
+own state, driven by the keyboard: `tab` switches tabs, `s` changes the
+3D object, `p` the photo, `space` pauses. A browser terminal has no
+pixels to spare, so the 3D object and the photo fall back to half-block
+characters.
+
+```elixir
+Kino.ExRatatui.new(NervesLivebookFP3.TUI.Dashboard, height: "600px")
+```
+
+## Write an app
+
+Any `ExRatatui.App` can take over the screen. This counter goes up with
+a tap or volume up, down with volume down, and back to zero with the
+power button (it arrives as `ctrl+q`).
+
+```elixir
+defmodule Demo.Counter do
+  use ExRatatui.App
+
+  alias ExRatatui.Event.{Key, Mouse}
+  alias ExRatatui.Layout
+  alias ExRatatui.Layout.Rect
+  alias ExRatatui.Style
+  alias ExRatatui.Text.{Line, Span}
+  alias ExRatatui.Widgets.{BigText, Block, Paragraph}
+
+  @impl true
+  def mount(_opts), do: {:ok, %{count: 0}}
+
+  @impl true
+  def render(state, frame) do
+    area = %Rect{x: 0, y: 0, width: frame.width, height: frame.height}
+
+    [_top, number, hint, _bottom] =
+      Layout.split(area, :vertical, [{:fill, 1}, {:length, 8}, {:length, 2}, {:fill, 1}])
+
+    [
+      {%Block{
+         title: " Demo.Counter ",
+         borders: [:all],
+         border_type: :rounded,
+         border_style: %Style{fg: :light_cyan}
+       }, area},
+      {%BigText{
+         lines: [%Line{spans: [%Span{content: Integer.to_string(state.count)}]}],
+         alignment: :center,
+         style: %Style{fg: :light_yellow}
+       }, number},
+      {%Paragraph{
+         text: "tap or vol up +1, vol down -1",
+         alignment: :center,
+         style: %Style{fg: :gray}
+       }, hint}
+    ]
+  end
+
+  @impl true
+  def handle_event(%Mouse{kind: "down"}, state), do: {:noreply, %{state | count: state.count + 1}}
+
+  def handle_event(%Key{code: "tab", kind: "press"}, state),
+    do: {:noreply, %{state | count: state.count + 1}}
+
+  def handle_event(%Key{code: "back_tab", kind: "press"}, state),
+    do: {:noreply, %{state | count: state.count - 1}}
+
+  def handle_event(%Key{code: "q", kind: "press", modifiers: ["ctrl"]}, state),
+    do: {:noreply, %{state | count: 0}}
+
+  def handle_event(_event, state), do: {:noreply, state}
+end
+```
+
+Swap the Dashboard for it:
+
+```elixir
+NervesLivebookFP3.TUI.stop()
+NervesLivebookFP3.TUI.start(app: Demo.Counter)
+```
+
+Change the colours or the hint in `render/2` and evaluate the module
+cell again: the running app picks up the new code on its next render, at
+the next tap. The same module also runs in the notebook:
+
+```elixir
+Kino.ExRatatui.new(Demo.Counter, height: "300px")
+```
+
+## Take a picture of the screen
+
+`NervesLivebookFP3.TUI.snapshot/0` turns whatever the TUI shows right
+now into a PNG, straight from the pixels it drew: no second phone
+needed to share it. This shows it here with a button to save it:
+
+```elixir
+{:ok, png} = NervesLivebookFP3.TUI.snapshot()
+
+Kino.Layout.grid([
+  Kino.Image.new(png, :png),
+  Kino.Download.new(fn -> png end, filename: "screen.png")
+])
+```
+
+## Stop
+
+Stopping the TUI hands the screen back to the IEx console, and frees
+it for Scenic (notebook 11). `NervesLivebookFP3.TUI.start()` brings the
+Dashboard back.
+
+```elixir
+NervesLivebookFP3.TUI.stop()
+```

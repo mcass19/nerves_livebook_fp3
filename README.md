@@ -90,6 +90,7 @@ between releases.
 | `11_screen_touch_buttons.livemd` | Draw on the screen, touch input, volume and power buttons |
 | `12_ai_on_the_phone.livemd` | The AI stack, YOLO object detection on a photo and live on video, Whisper speech to text, TinyLlama chat |
 | `13_ssh_keys.livemd` | The SSH keys the phone accepts: list, add and delete them |
+| `14_tuis.livemd` | Terminal UIs on the screen with ExRatatui: a touch dashboard, the same app in Livebook, writing one |
 
 The notebooks are copied to `/data/livebook/notebooks` on first boot and
 starred on Livebook's home page. Your edits are kept: a notebook that's
@@ -213,6 +214,7 @@ nerves_livebook_fp3
 ├── ex_rmtfs, ex_remoteproc   modem storage daemon, ADSP start-up
 ├── ex_qcom_smgr, fp3_camera, ex_audio, ex_nfc, ex_location, ex_qbootctl
 ├── fp3_modem, vintage_net_qmi, qmi   cellular (only with FP3_APN)
+├── ex_ratatui, raster_ex_ratatui, kino_ex_ratatui   terminal UIs on the screen
 └── livebook + kino
 ```
 

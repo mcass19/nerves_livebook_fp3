@@ -12,7 +12,12 @@ defmodule NervesLivebookFP3.Application do
     sync_notebooks() |> star_notebooks()
 
     # Scenic's supervisor, so notebooks can start viewports on the screen.
-    children = [{Scenic, []} | microphone_warm_up()]
+    children = [
+      {Scenic, []},
+      # The one that runs a TUI on the screen (NervesLivebookFP3.TUI).
+      {DynamicSupervisor, name: NervesLivebookFP3.TUI.Supervisor, strategy: :one_for_one}
+      | microphone_warm_up()
+    ]
 
     with {:ok, pid} <-
            Supervisor.start_link(children,
@@ -20,6 +25,8 @@ defmodule NervesLivebookFP3.Application do
              name: NervesLivebookFP3.Supervisor
            ) do
       validate_firmware()
+      # After validating: a screen that fails must not cost the firmware.
+      NervesLivebookFP3.TUI.start_at_boot()
       {:ok, pid}
     end
   end
